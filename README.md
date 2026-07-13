@@ -1,161 +1,137 @@
-# Dumbbell Press Counter 
+## Dumbbell Press Counter 🏋️
 
-Waffle Nano V1 上的哑铃推举计数器。使用 ICM20948 加速度传感器检测推举动作，ST7789 屏幕显示计数，支持按键交互和 LED 反馈。
-
-## 功能
-
-- **总加速度幅值检测**：`sqrt(ax² + ay² + az²) - 重力基线`，方向无关
-- **自动重力校准**：启动时保持静止即可
-- **组计数模式**：短按按键开始一组（默认10次），自动停止
-- **LED 反馈**：组完成时 LED 闪烁 2 秒
-- **自动待机**：完成组后自动回到待机界面
-- **长按校准**：计数为 0 时长按按键，做 2 次推举自动计算阈值
-- **计数中重置**：计数过程中短按按键归零重新计
-- **实时曲线**：45 点加速度波形滚动显示（已启用时）
-- **大数字显示**：全屏大字计数，一目了然
-
-## 硬件需求
-
-| 组件 | 说明 |
-|------|------|
-| Waffle Nano V1 | OpenHarmony 开发板 |
-| ICM20948 | 板载九轴加速度传感器 |
-| ST7789 | 板载 240×240 TFT 显示屏 |
-| 按键 ×1 | 接 Pin(12)，另一脚接 GND |
-| LED ×1 | 接 Pin(2) → 电阻(220Ω) → GND |
-
-## 接线
-
-```
-Waffle Nano V1
-┌─────────────────────┐
-│                     │
-│  Pin(2)  ──── LED ──┴─── GND    (LED 反馈)
-│  Pin(12) ──── 按键 ──── GND    (用户交互)
-│                     │
-│  Pin(9)  ──── SDA  │  (板载 ICM20948)
-│  Pin(10) ──── SCL  │
-│                     │
-│  Pin(6)  ──── SCK  │
-│  Pin(7)  ──── DC   │  (板载 ST7789)
-│  Pin(8)  ──── MOSI │
-│  Pin(11) ──── RST  │
-└─────────────────────┘
-```
-
-## 快速开始
-
-### 1. 上传文件到设备
-
-将以下文件上传到 Waffle Nano：
-
-```
-dumbbell_press_counter.py   # 主程序
-button_test.py              # 按键/LED 测试（可选）
-```
-
-### 2. 测试按键和 LED（可选）
-
-```python
-import button_test
-```
-
-按下按键看 LED 是否闪烁，串口输出 `PRESSED` / `RELEASED`。
-
-### 3. 运行主程序
-
-```python
-import dumbbell_press_counter
-```
-
-或保存为 `main.py` 上电自动运行。
-
-### 4. 使用方式
-
-| 操作 | 功能 |
-|------|------|
-| **短按** | 开始一组计数（默认10次） |
-| **计数中短按** | 归零重新计 |
-| **计数0时长按** | 重新校准阈值（做2次推举） |
-| **待机时长按** | 校准模式 |
+Waffle Nano  上的哑铃推举计数器。使用 ICM20948 加速度传感器检测推举动作，ST7789 屏幕显示，按键交互 + LED 反馈。
 
 ## 文件说明
 
-| 文件 | 用途 |
+| 文件 | 说明 |
 |------|------|
-| `dumbbell_press_counter.py` | 主程序 |
-| `button_test.py` | 按键和 LED 测试程序 |
-| `README.md` | 本文件 |
+| `dumbbell_press_counter.py` | **主程序** — 大数字显示 + 按键交互 + 组计数 + LED 反馈 |
+| `curve_monitor.py` | **曲线显示器** — 实时加速度滚动曲线（独立运行） |
+| `button_test.py` | **测试程序** — 按键和 LED 功能测试 |
 
-## 技术细节
+## 硬件接线
 
-### 检测原理
+```
+Waffle Nano V1 (板载传感器，无需额外接线即可运行主程序)
+
+外接:
+  Pin(2)  ── LED ── 220Ω ── GND     (可选，组完成时闪烁)
+  Pin(12) ── 按键 ── GND             (推荐，交互操作)
+```
+
+**无需外接任何元件也能运行**，只是只能用串口看计数结果。
+
+## 主程序使用 (`dumbbell_press_counter.py`)
+
+### 操作方式
+
+| 操作 | 功能 |
+|------|------|
+| **短按** | 开始一组计数（默认 10 次）→ 倒计时 3-2-1 → 开始计数 |
+| **计数中短按** | 归零重新计 |
+| **计数 0 时长按** | 进入校准：做 2 次推举，自动计算阈值 |
+| **待机时长按** | 进入校准模式 |
+| 组完成后 | LED 闪烁 2 秒 → 自动回到待机 |
+
+### 屏幕显示
+
+```
+待机界面                 计数界面
+┌──────────────────┐    ┌──────────────────┐
+│    DUMBBELL      │    │    DUMBBELL      │
+│   SHORT:SET      │    │                  │
+│    10 REPS       │    │       5/10       │ ← 当前/目标
+│    LONG:CAL      │    │       SET        │ ← 状态
+│      PRESS       │    │      M: 38       │ ← 运动幅值(mg)
+└──────────────────┘    └──────────────────┘
+```
+
+## 曲线显示器 (`curve_monitor.py`)
+
+独立程序，显示 60 点实时滚动曲线，用于观察加速度信号：
+
+```
+┌──────────────────┐
+│ M: 32    G: 1002 │ ← 运动幅值 / 重力基线
+│      CURVE       │
+├──────────────────┤
+│                  │
+│   ╱╲    ╱╲      │
+│  ╱  ╲  ╱  ╲     │ ← 60点滚动曲线
+│ ╱    ╲╱    ╲    │
+│                  │
+└──────────────────┘
+```
+
+运行：`import curve_monitor`
+
+## 技术原理
+
+### 检测算法
 
 ```
 motion = sqrt(ax² + ay² + az²) - gravity_baseline
 ```
 
-- 总加速度幅值不受传感器方向影响
-- 无论直线还是弧线运动都能检测
-- 重力基线在启动时校准，运行时缓慢自适应
+- **总加速度幅值**：方向无关，无论直线还是弧线运动都能检测
+- **基线校准**：启动时保持静止 1 秒自动计算
+- **基线自适应**：静止时缓慢跟踪漂移
 
 ### 状态机
 
 ```
 IDLE → PRESSING → RETURNING → LOCKED → IDLE (计数+1)
+  ↑        ↑           ↑         ↑
+  │   运动>阈值   从峰值回落  锁定300ms
+  │     +方向上升  >Drop阈值  防反弹
 ```
-
-- IDLE: 等待运动超过阈值
-- PRESSING: 追踪峰值
-- RETURNING: 检测回落
-- LOCKED: 计数后锁定 300ms 防反弹
 
 ### 防抖机制
 
-- 方向验证（rising / falling）
-- 最低动作时间（MIN_CYCLE_TIME = 300ms）
-- 峰值超时重置（PEAK_TIMEOUT = 1500ms）
-- 计数后锁定（LOCK_MS = 300ms）
+| 机制 | 说明 |
+|------|------|
+| 方向验证 | 必须经历上升 → 下降才算有效 |
+| 最低动作时间 | 300ms 内不重复触发 |
+| 峰值超时 | 1500ms 无变化自动重置 |
+| 计数后锁定 | 300ms 内不响应任何信号 |
 
-### 显示布局
+### 校准模式
+
+长按进入，做 2 次标准推举，系统自动计算：
 
 ```
-待机界面:
-┌──────────────────┐
-│    DUMBBELL      │
-│   SHORT:SET      │
-│    10 REPS       │
-│    LONG:CAL      │
-│      PRESS       │
-└──────────────────┘
-
-计数界面:
-┌──────────────────┐
-│    DUMBBELL      │
-│                  │
-│       5/10       │  ← 当前/目标
-│                  │
-│       SET        │  ← 组模式
-│      M: 38       │  ← 运动幅值
-└──────────────────┘
+TH (触发阈值)   = 平均峰值 × 0.6
+Drop (回落阈值) = 平均峰值 × 0.4
+Reset (复位阈值) = -平均峰值 × 0.3
 ```
 
 ## 参数调节
 
-在文件顶部可修改：
+打开 `dumbbell_press_counter.py` 修改顶部常量：
 
 ```python
-PRESS_THRESHOLD = 30   # 触发推举的阈值
-RETURN_DROP = 20       # 回落判定阈值
-RESET_THRESHOLD = -20  # 复位阈值
-MIN_CYCLE_TIME = 300   # 最小动作周期(ms)
-MIN_REP_TIME = 300     # 最小推举间隔(ms)
-PEAK_TIMEOUT = 1500    # 峰值超时(ms)
-ALPHA = 0.3            # 低通滤波系数 (0-1)
+PRESS_THRESHOLD = 30    # 触发阈值
+RETURN_DROP = 20        # 回落阈值
+RESET_THRESHOLD = -20   # 复位阈值
+MIN_CYCLE_TIME = 300    # 最小动作周期(ms)
+MIN_REP_TIME = 300      # 推举间隔(ms)
+PEAK_TIMEOUT = 1500     # 峰值超时(ms)
+ALPHA = 0.3             # 滤波系数(0-1)
+LOCK_MS = 300           # 计数后锁定(ms)
+SET_REPS = 10           # 每组次数
+```
+
+## 测试
+
+先上传 `button_test.py` 测试按键和 LED：
+
+```python
+import button_test
+# 按按键 → LED 闪烁 3 次 + 串口输出
 ```
 
 ## 参考
 
 - [Waffle Nano V1 Python API 文档](https://gitee.com/blackwalnutlabs/waffle_nano_v1_python_api_document)
-- [ICM20948 数据手册](https://invensense.tdk.com/products/motion-tracking/9-axis/icm-20948/)
-- [ST7789 数据手册](https://cdn.sparkfun.com/assets/learn_tutorials/1/3/6/6/ST7789_V2.0.pdf)
+- [ICM20948](https://invensense.tdk.com/products/motion-tracking/9-axis/icm-20948/) | [ST7789](https://cdn.sparkfun.com/assets/learn_tutorials/1/3/6/6/ST7789_V2.0.pdf)
